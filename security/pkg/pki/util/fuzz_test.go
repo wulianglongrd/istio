@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ra
+package util
 
 import (
 	"testing"
@@ -40,6 +40,7 @@ func FuzzValidateCSR(f *testing.F) {
 		}
 
 		// call ValidateCSR()
-		ValidateCSR(csrPEM, subjectIDs)
+		ValidateCSR(csrPEM, subjectIDs, true)
+		ValidateCSR(csrPEM, subjectIDs, false)
 	})
 }

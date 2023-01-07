@@ -20,6 +20,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"github.com/google/go-cmp/cmp"
+	"istio.io/istio/pkg/spiffe"
 	"reflect"
 	"strings"
 	"testing"
@@ -213,4 +215,68 @@ func TestGenCSRTemplateForDualUse(t *testing.T) {
 			t.Errorf("unexpected value for 'CommonName' field: want %v but got %v", tc.expectedCN, csr.Subject.CommonName)
 		}
 	}
+}
+
+func TestValidateCSR(t *testing.T) {
+	csrHostName := spiffe.Identity{
+		TrustDomain:    "cluster.local",
+		Namespace:      "default",
+		ServiceAccount: "bookinfo-productpage",
+	}
+	certOptions := CertOptions{
+		Host:       csrHostName.String(),
+		RSAKeySize: 2048,
+		PKCS8Key:   false,
+		ECSigAlg:   EcdsaSigAlg,
+	}
+	csrPEM, _, err := GenCSR(certOptions)
+	if err != nil {
+		t.Fatalf("Error creating Mock CA client: %v", err)
+	}
+	testCases := []struct {
+		name          string
+		subjectIDs    []string
+		checkIdentity bool
+		wantErr       error
+	}{
+		{
+			name:          "identity ok",
+			subjectIDs:    []string{csrHostName.String(), "Random-Host-Name"},
+			checkIdentity: true,
+			wantErr:       nil,
+		},
+		{
+			name:          "RA identity error",
+			subjectIDs:    []string{"Random-Host-Name"},
+			checkIdentity: true,
+			wantErr:       errors.New("subjectIdSet is not superset of csrIdSet"),
+		},
+		{
+			name:          "RA identity error but not check",
+			subjectIDs:    []string{"Random-Host-Name"},
+			checkIdentity: false,
+			wantErr:       nil,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			_, gotErr := ValidateCSR(csrPEM, tt.subjectIDs, tt.checkIdentity)
+			if !errorEqual(tt.wantErr, gotErr) {
+				t.Errorf("err want %+v, but got %+v", tt.wantErr, gotErr)
+			}
+		})
+	}
+}
+
+func errorEqual(a, b error) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil && b != nil {
+		return false
+	}
+	if a != nil && b == nil {
+		return false
+	}
+	return cmp.Equal(a.Error(), b.Error())
 }

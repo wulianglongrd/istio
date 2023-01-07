@@ -70,35 +70,6 @@ const (
 	DefaultExtCACertDir string = "./etc/external-ca-cert"
 )
 
-// ValidateCSR : Validate all SAN extensions in csrPEM match authenticated identities
-func ValidateCSR(csrPEM []byte, subjectIDs []string) bool {
-	var match bool
-	csr, err := util.ParsePemEncodedCSR(csrPEM)
-	if err != nil {
-		return false
-	}
-	if err := csr.CheckSignature(); err != nil {
-		return false
-	}
-	csrIDs, err := util.ExtractIDs(csr.Extensions)
-	if err != nil {
-		return false
-	}
-	for _, s1 := range csrIDs {
-		match = false
-		for _, s2 := range subjectIDs {
-			if s1 == s2 {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return false
-		}
-	}
-	return true
-}
-
 // NewIstioRA is a factory method that returns an RA that implements the RegistrationAuthority functionality.
 // the caOptions defines the external provider
 func NewIstioRA(opts *IstioRAOptions) (RegistrationAuthority, error) {
@@ -118,19 +89,15 @@ func preSign(raOpts *IstioRAOptions, csrPEM []byte, subjectIDs []string, request
 		return requestedLifetime, raerror.NewError(raerror.CSRError,
 			fmt.Errorf("unable to generate CA certifificates"))
 	}
-	if !ValidateCSR(csrPEM, subjectIDs) {
-		return requestedLifetime, raerror.NewError(raerror.CSRError, fmt.Errorf(
-			"unable to validate SAN Identities in CSR"))
+
+	if _, err := util.ValidateCSR(csrPEM, subjectIDs, true); err != nil {
+		return requestedLifetime, raerror.NewError(raerror.CSRError,
+			fmt.Errorf("unable to validate SAN Identities in CSR: %v", err))
 	}
-	// If the requested requestedLifetime is non-positive, apply the default TTL.
-	lifetime := requestedLifetime
-	if requestedLifetime.Seconds() <= 0 {
-		lifetime = raOpts.DefaultCertTTL
-	}
-	// If the requested TTL is greater than maxCertTTL, return an error
-	if requestedLifetime.Seconds() > raOpts.MaxCertTTL.Seconds() {
-		return lifetime, raerror.NewError(raerror.TTLError, fmt.Errorf(
-			"requested TTL %s is greater than the max allowed TTL %s", requestedLifetime, raOpts.MaxCertTTL))
+
+	lifetime, err := util.CheckCertLifetime(requestedLifetime, raOpts.DefaultCertTTL, raOpts.MaxCertTTL, true)
+	if err != nil {
+		return lifetime, raerror.NewError(raerror.CSRError, err)
 	}
 	return lifetime, nil
 }

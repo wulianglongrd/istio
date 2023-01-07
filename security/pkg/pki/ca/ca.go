@@ -392,24 +392,14 @@ func (ca *IstioCA) sign(csrPEM []byte, subjectIDs []string, requestedLifetime ti
 		return nil, caerror.NewError(caerror.CANotReady, fmt.Errorf("Istio CA is not ready")) // nolint
 	}
 
-	csr, err := util.ParsePemEncodedCSR(csrPEM)
+	csr, err := util.ValidateCSR(csrPEM, subjectIDs, false)
 	if err != nil {
 		return nil, caerror.NewError(caerror.CSRError, err)
 	}
 
-	if err := csr.CheckSignature(); err != nil {
+	lifetime, err := util.CheckCertLifetime(requestedLifetime, ca.defaultCertTTL, ca.maxCertTTL, checkLifetime)
+	if err != nil {
 		return nil, caerror.NewError(caerror.CSRError, err)
-	}
-
-	lifetime := requestedLifetime
-	// If the requested requestedLifetime is non-positive, apply the default TTL.
-	if requestedLifetime.Seconds() <= 0 {
-		lifetime = ca.defaultCertTTL
-	}
-	// If checkLifetime is set and the requested TTL is greater than maxCertTTL, return an error
-	if checkLifetime && requestedLifetime.Seconds() > ca.maxCertTTL.Seconds() {
-		return nil, caerror.NewError(caerror.TTLError, fmt.Errorf(
-			"requested TTL %s is greater than the max allowed TTL %s", requestedLifetime, ca.maxCertTTL))
 	}
 
 	certBytes, err := util.GenCertFromCSR(csr, signingCert, csr.PublicKey, *signingKey, subjectIDs, lifetime, forCA)

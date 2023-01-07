@@ -16,6 +16,8 @@ package util
 
 import (
 	"crypto/x509"
+	"errors"
+	"github.com/google/go-cmp/cmp"
 	"log"
 	"os"
 	"strings"
@@ -227,6 +229,57 @@ func TestCertExpired(t *testing.T) {
 			}
 			if certExpired != tc.expected {
 				t.Errorf("isCertExpired: get %v, want %v", certExpired, tc.expected)
+			}
+		})
+	}
+}
+
+func TestCheckCertLifetime(t *testing.T) {
+	testCases := []struct {
+		name              string
+		requestedLifetime time.Duration
+		defaultCertTTl    time.Duration
+		maxCertTTL        time.Duration
+		checkLifetime     bool
+		want              time.Duration
+		wantErr           error
+	}{
+		{
+			name:              "requested lifetime non-positive",
+			requestedLifetime: time.Duration(-1),
+			defaultCertTTl:    time.Duration(10),
+			maxCertTTL:        time.Duration(100),
+			checkLifetime:     true,
+			want:              time.Duration(10),
+			wantErr:           nil,
+		},
+		{
+			name:              "requested lifetime TTL is greater than maxCertTTL",
+			requestedLifetime: time.Duration(200),
+			defaultCertTTl:    time.Duration(10),
+			maxCertTTL:        time.Duration(100),
+			checkLifetime:     true,
+			want:              time.Duration(0),
+			wantErr:           errors.New("requested TTL 200ns is greater than the max allowed TTL 100ns"),
+		},
+		{
+			name:              "requested lifetime TTL is greater than maxCertTTL but not check lifetime",
+			requestedLifetime: time.Duration(200),
+			defaultCertTTl:    time.Duration(10),
+			maxCertTTL:        time.Duration(100),
+			checkLifetime:     false,
+			want:              time.Duration(200),
+			wantErr:           nil,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotErr := CheckCertLifetime(tt.requestedLifetime, tt.defaultCertTTl, tt.maxCertTTL, tt.checkLifetime)
+			if !errorEqual(tt.wantErr, gotErr) {
+				t.Errorf("err want %+v, but got %+v", tt.wantErr, gotErr)
+			}
+			if !cmp.Equal(tt.want, got) {
+				t.Errorf("want %+v, but got %+v", tt.want, got)
 			}
 		})
 	}

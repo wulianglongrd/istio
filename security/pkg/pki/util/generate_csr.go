@@ -28,6 +28,7 @@ import (
 	"crypto/x509/pkix"
 	"errors"
 	"fmt"
+	"istio.io/istio/pkg/util/sets"
 	"os"
 	"strings"
 
@@ -127,4 +128,30 @@ func AppendCertByte(pemCert []byte, rootCert []byte) []byte {
 	}
 	rootCerts = append(rootCerts, rootCert...)
 	return rootCerts
+}
+
+// ValidateCSR validate Certificate Signing Request
+func ValidateCSR(csrPEM []byte, subjectIDs []string, checkIdentities bool) (*x509.CertificateRequest, error) {
+	csr, err := ParsePemEncodedCSR(csrPEM)
+	if err != nil {
+		return nil, err
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, err
+	}
+
+	if checkIdentities {
+		csrIDs, err := ExtractIDs(csr.Extensions)
+		if err != nil {
+			return nil, err
+		}
+
+		csrIdSet := sets.New[string](csrIDs...)
+		subjectIdSet := sets.New[string](subjectIDs...)
+		if !subjectIdSet.SupersetOf(csrIdSet) {
+			return nil, errors.New("subjectIdSet is not superset of csrIdSet")
+		}
+	}
+
+	return csr, nil
 }

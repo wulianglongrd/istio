@@ -215,25 +215,3 @@ func TestK8sSign(t *testing.T) {
 		t.Errorf("K8s CA Signing CSR failed")
 	}
 }
-
-func TestValidateCSR(t *testing.T) {
-	csrPEM := createFakeCsr(t)
-	client := initFakeKubeClient(t, []byte(TestCertificatePEM))
-	_, err := createFakeK8sRA(client, TestCACertFile)
-	if err != nil {
-		t.Errorf("Validation CSR failed")
-	}
-	var testSubjectIDs []string
-
-	// Test Case 1
-	testSubjectIDs = []string{testCsrHostName, "Random-Host-Name"}
-	if !ValidateCSR(csrPEM, testSubjectIDs) {
-		t.Errorf("Test 1: CSR Validation failed")
-	}
-
-	// Test Case 2
-	testSubjectIDs = []string{"Random-Host-Name"}
-	if ValidateCSR(csrPEM, testSubjectIDs) {
-		t.Errorf("Test 2: CSR Validation failed")
-	}
-}

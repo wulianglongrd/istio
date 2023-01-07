@@ -194,3 +194,17 @@ func IsCertExpired(filepath string) (bool, error) {
 	}
 	return x509Cert.NotAfter.Before(time.Now()), nil
 }
+
+// CheckCertLifetime check certificate lifetime
+func CheckCertLifetime(requestedLifetime, defaultCertTTl, maxCertTTL time.Duration, checkLifetime bool) (time.Duration, error) {
+	lifetime := requestedLifetime
+	if requestedLifetime.Seconds() <= 0 {
+		lifetime = defaultCertTTl
+	}
+
+	if checkLifetime && requestedLifetime.Seconds() > maxCertTTL.Seconds() {
+		return time.Duration(0), fmt.Errorf("requested TTL %s is greater than the max allowed TTL %s",
+			requestedLifetime, maxCertTTL)
+	}
+	return lifetime, nil
+}
