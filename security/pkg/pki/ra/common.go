@@ -95,7 +95,7 @@ func preSign(raOpts *IstioRAOptions, csrPEM []byte, subjectIDs []string, request
 			fmt.Errorf("unable to validate SAN Identities in CSR: %v", err))
 	}
 
-	lifetime, err := util.CheckCertLifetime(requestedLifetime, raOpts.DefaultCertTTL, raOpts.MaxCertTTL, true)
+	lifetime, err := util.ValidateCertLifetime(requestedLifetime, raOpts.DefaultCertTTL, raOpts.MaxCertTTL, true)
 	if err != nil {
 		return lifetime, raerror.NewError(raerror.CSRError, err)
 	}

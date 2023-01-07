@@ -397,7 +397,7 @@ func (ca *IstioCA) sign(csrPEM []byte, subjectIDs []string, requestedLifetime ti
 		return nil, caerror.NewError(caerror.CSRError, err)
 	}
 
-	lifetime, err := util.CheckCertLifetime(requestedLifetime, ca.defaultCertTTL, ca.maxCertTTL, checkLifetime)
+	lifetime, err := util.ValidateCertLifetime(requestedLifetime, ca.defaultCertTTL, ca.maxCertTTL, checkLifetime)
 	if err != nil {
 		return nil, caerror.NewError(caerror.CSRError, err)
 	}

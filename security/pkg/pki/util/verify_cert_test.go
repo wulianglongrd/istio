@@ -234,7 +234,7 @@ func TestCertExpired(t *testing.T) {
 	}
 }
 
-func TestCheckCertLifetime(t *testing.T) {
+func TestValidateCertLifetime(t *testing.T) {
 	testCases := []struct {
 		name              string
 		requestedLifetime time.Duration
@@ -274,7 +274,7 @@ func TestCheckCertLifetime(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := CheckCertLifetime(tt.requestedLifetime, tt.defaultCertTTl, tt.maxCertTTL, tt.checkLifetime)
+			got, gotErr := ValidateCertLifetime(tt.requestedLifetime, tt.defaultCertTTl, tt.maxCertTTL, tt.checkLifetime)
 			if !errorEqual(tt.wantErr, gotErr) {
 				t.Errorf("err want %+v, but got %+v", tt.wantErr, gotErr)
 			}

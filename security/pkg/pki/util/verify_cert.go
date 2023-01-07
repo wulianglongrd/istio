@@ -195,8 +195,8 @@ func IsCertExpired(filepath string) (bool, error) {
 	return x509Cert.NotAfter.Before(time.Now()), nil
 }
 
-// CheckCertLifetime check certificate lifetime
-func CheckCertLifetime(requestedLifetime, defaultCertTTl, maxCertTTL time.Duration, checkLifetime bool) (time.Duration, error) {
+// ValidateCertLifetime validate certificate lifetime
+func ValidateCertLifetime(requestedLifetime, defaultCertTTl, maxCertTTL time.Duration, checkLifetime bool) (time.Duration, error) {
 	lifetime := requestedLifetime
 	if requestedLifetime.Seconds() <= 0 {
 		lifetime = defaultCertTTl
