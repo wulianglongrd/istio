@@ -20,6 +20,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
+	"istio.io/istio/pkg/util/sets"
 	raerror "istio.io/istio/security/pkg/pki/error"
 	"istio.io/istio/security/pkg/pki/util"
 	caserver "istio.io/istio/security/pkg/server/ca"
@@ -72,7 +73,6 @@ const (
 
 // ValidateCSR : Validate all SAN extensions in csrPEM match authenticated identities
 func ValidateCSR(csrPEM []byte, subjectIDs []string) bool {
-	var match bool
 	csr, err := util.ParsePemEncodedCSR(csrPEM)
 	if err != nil {
 		return false
@@ -84,19 +84,10 @@ func ValidateCSR(csrPEM []byte, subjectIDs []string) bool {
 	if err != nil {
 		return false
 	}
-	for _, s1 := range csrIDs {
-		match = false
-		for _, s2 := range subjectIDs {
-			if s1 == s2 {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return false
-		}
-	}
-	return true
+
+	subjectIDSet := sets.New[string](subjectIDs...)
+	csrIDSet := sets.New[string](csrIDs...)
+	return subjectIDSet.ContainsAll(csrIDSet)
 }
 
 // NewIstioRA is a factory method that returns an RA that implements the RegistrationAuthority functionality.
