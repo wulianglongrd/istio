@@ -15,6 +15,7 @@
 package model
 
 import (
+	"golang.org/x/exp/slices"
 	"math"
 	"net"
 	"reflect"
@@ -68,6 +69,9 @@ func (ngh *NetworkGatewaysHandler) NotifyGatewayHandlers() {
 // NewNetworkManager creates a new NetworkManager from the Environment by merging
 // together the MeshNetworks and ServiceRegistry-specific gateways.
 func NewNetworkManager(env *Environment, xdsUpdater XDSUpdater) (*NetworkManager, error) {
+	// meaningless modification, just to reproduce `make fmt` duplicate import
+	_ = slices.Equal([]string{"a"}, []string{"a"})
+
 	nameCache, err := newNetworkGatewayNameCache()
 	if err != nil {
 		return nil, err
