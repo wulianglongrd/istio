@@ -1232,6 +1232,61 @@ func TestConvertToEnvoyJwtConfig(t *testing.T) {
 				BypassCorsPreflight: true,
 			},
 		},
+		{
+			name: "test jwks local file data source",
+			in: []*v1beta1.JWTRule{
+				{
+					Issuer:  "https://secret.foo.com",
+					JwksUri: "file:///etc/envoy/jwks/jwks.txt",
+				},
+			},
+			expected: &envoy_jwt.JwtAuthentication{
+				Rules: []*envoy_jwt.RequirementRule{
+					{
+						Match: &route.RouteMatch{
+							PathSpecifier: &route.RouteMatch_Prefix{
+								Prefix: "/",
+							},
+						},
+						RequirementType: &envoy_jwt.RequirementRule_Requires{
+							Requires: &envoy_jwt.JwtRequirement{
+								RequiresType: &envoy_jwt.JwtRequirement_RequiresAny{
+									RequiresAny: &envoy_jwt.JwtRequirementOrList{
+										Requirements: []*envoy_jwt.JwtRequirement{
+											{
+												RequiresType: &envoy_jwt.JwtRequirement_ProviderName{
+													ProviderName: "origins-0",
+												},
+											},
+											{
+												RequiresType: &envoy_jwt.JwtRequirement_AllowMissing{
+													AllowMissing: &emptypb.Empty{},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Providers: map[string]*envoy_jwt.JwtProvider{
+					"origins-0": {
+						Issuer: "https://secret.foo.com",
+						JwksSourceSpecifier: &envoy_jwt.JwtProvider_LocalJwks{
+							LocalJwks: &core.DataSource{
+								Specifier: &core.DataSource_Filename{
+									Filename: "/etc/envoy/jwks/jwks.txt",
+								},
+							},
+						},
+						Forward:           false,
+						PayloadInMetadata: "https://secret.foo.com",
+					},
+				},
+				BypassCorsPreflight: true,
+			},
+		},
 	}
 
 	push := &model.PushContext{}

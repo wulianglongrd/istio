@@ -19,6 +19,8 @@ const (
 	PolicyFirstParty = "first-party-jwt"
 )
 
+const JwksLocalFileDataSourcePrefix = "file://"
+
 type JwksFetchMode int
 
 const (

@@ -16,6 +16,7 @@ package authn
 
 import (
 	"fmt"
+	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -264,62 +265,7 @@ func convertToEnvoyJwtConfig(jwtRules []*v1beta1.JWTRule, push *model.PushContex
 
 		authnLog.Debugf("JwksFetchMode is set to: %v", features.JwksFetchMode)
 
-		timeout := &durationpb.Duration{Seconds: 5}
-		if jwtRule.Timeout != nil {
-			timeout = jwtRule.Timeout
-		}
-
-		// Use Envoy remote jwks if jwksUri is not empty and JwksFetchMode not Istiod. Parse the jwksUri to get the
-		// cluster name, generate the jwt filter config using remote Jwks.
-		// If failed to parse the cluster name, only fallback to let istiod to fetch the jwksUri when
-		// remoteJwksMode is Hybrid.
-		if features.JwksFetchMode != jwt.Istiod && jwtRule.JwksUri != "" {
-			jwksInfo, err := security.ParseJwksURI(jwtRule.JwksUri)
-			if err != nil {
-				authnLog.Errorf("Failed to parse jwt rule jwks uri %v", err)
-			}
-			_, cluster, err := model.LookupCluster(push, jwksInfo.Hostname.String(), jwksInfo.Port)
-			authnLog.Debugf("Look up cluster result: %v", cluster)
-
-			if err == nil && len(cluster) > 0 {
-				// This is a case of URI pointing to mesh cluster. Setup Remote Jwks and let Envoy fetch the key.
-				provider.JwksSourceSpecifier = &envoy_jwt.JwtProvider_RemoteJwks{
-					RemoteJwks: &envoy_jwt.RemoteJwks{
-						HttpUri: &core.HttpUri{
-							Uri: jwtRule.JwksUri,
-							HttpUpstreamType: &core.HttpUri_Cluster{
-								Cluster: cluster,
-							},
-							Timeout: timeout,
-						},
-						CacheDuration: &durationpb.Duration{Seconds: 5 * 60},
-					},
-				}
-			} else if features.JwksFetchMode == jwt.Hybrid {
-				provider.JwksSourceSpecifier = push.JwtKeyResolver.BuildLocalJwks(jwtRule.JwksUri, jwtRule.Issuer, "", timeout.AsDuration())
-			} else {
-				model.IncLookupClusterFailures("jwks")
-				// Log error and create remote JWKs with fake cluster
-				authnLog.Errorf("Failed to look up Envoy cluster %v. "+
-					"Please create ServiceEntry to register external JWKs server or "+
-					"set PILOT_JWT_ENABLE_REMOTE_JWKS to hybrid/istiod mode.", err)
-				provider.JwksSourceSpecifier = &envoy_jwt.JwtProvider_RemoteJwks{
-					RemoteJwks: &envoy_jwt.RemoteJwks{
-						HttpUri: &core.HttpUri{
-							Uri: jwtRule.JwksUri,
-							HttpUpstreamType: &core.HttpUri_Cluster{
-								Cluster: model.BuildSubsetKey(model.TrafficDirectionOutbound, "", jwksInfo.Hostname, jwksInfo.Port),
-							},
-							Timeout: timeout,
-						},
-						CacheDuration: &durationpb.Duration{Seconds: 5 * 60},
-					},
-				}
-			}
-		} else {
-			// Use inline jwks as existing flow, either jwtRule.jwks is empty or let istiod to fetch the jwtRule.jwksUri
-			provider.JwksSourceSpecifier = push.JwtKeyResolver.BuildLocalJwks(jwtRule.JwksUri, jwtRule.Issuer, jwtRule.Jwks, timeout.AsDuration())
-		}
+		addJwksSourceSpecifier(provider, push, jwtRule)
 
 		name := fmt.Sprintf("origins-%d", i)
 		providers[name] = provider
@@ -403,6 +349,75 @@ func convertToEnvoyJwtConfig(jwtRules []*v1beta1.JWTRule, push *model.PushContex
 		Providers:           providers,
 		BypassCorsPreflight: true,
 	}
+}
+
+func addJwksSourceSpecifier(provider *envoy_jwt.JwtProvider, push *model.PushContext, jwtRule *v1beta1.JWTRule) {
+	timeout := &durationpb.Duration{Seconds: 5}
+	if jwtRule.Timeout != nil {
+		timeout = jwtRule.Timeout
+	}
+
+	// Use Envoy remote jwks if jwksUri is not empty and JwksFetchMode not Istiod. Parse the jwksUri to get the
+	// cluster name, generate the jwt filter config using remote Jwks.
+	// If failed to parse the cluster name, only fallback to let istiod to fetch the jwksUri when
+	// remoteJwksMode is Hybrid.
+	if features.JwksFetchMode != jwt.Istiod && jwtRule.JwksUri != "" {
+		if strings.HasPrefix(jwtRule.JwksUri, jwt.JwksLocalFileDataSourcePrefix) {
+			provider.JwksSourceSpecifier = push.JwtKeyResolver.BuildLocalJwks(jwtRule.JwksUri, jwtRule.Issuer, "", timeout.AsDuration())
+			return
+		}
+
+		jwksInfo, err := security.ParseJwksURI(jwtRule.JwksUri)
+		if err != nil {
+			authnLog.Errorf("Failed to parse jwt rule jwks uri %v", err)
+		}
+		_, cluster, err := model.LookupCluster(push, jwksInfo.Hostname.String(), jwksInfo.Port)
+		authnLog.Debugf("Look up cluster result: %v", cluster)
+
+		// This is a case of URI pointing to mesh cluster. Setup Remote Jwks and let Envoy fetch the key.
+		if err == nil && len(cluster) > 0 {
+			provider.JwksSourceSpecifier = &envoy_jwt.JwtProvider_RemoteJwks{
+				RemoteJwks: &envoy_jwt.RemoteJwks{
+					HttpUri: &core.HttpUri{
+						Uri: jwtRule.JwksUri,
+						HttpUpstreamType: &core.HttpUri_Cluster{
+							Cluster: cluster,
+						},
+						Timeout: timeout,
+					},
+					CacheDuration: &durationpb.Duration{Seconds: 5 * 60},
+				},
+			}
+			return
+		}
+
+		if features.JwksFetchMode == jwt.Hybrid {
+			provider.JwksSourceSpecifier = push.JwtKeyResolver.BuildLocalJwks(jwtRule.JwksUri, jwtRule.Issuer, "", timeout.AsDuration())
+			return
+		}
+
+		// Log error and create remote JWKs with fake cluster
+		model.IncLookupClusterFailures("jwks")
+		authnLog.Errorf("Failed to look up Envoy cluster %v. "+
+			"Please create ServiceEntry to register external JWKs server or "+
+			"set PILOT_JWT_ENABLE_REMOTE_JWKS to hybrid/istiod mode.", err)
+		provider.JwksSourceSpecifier = &envoy_jwt.JwtProvider_RemoteJwks{
+			RemoteJwks: &envoy_jwt.RemoteJwks{
+				HttpUri: &core.HttpUri{
+					Uri: jwtRule.JwksUri,
+					HttpUpstreamType: &core.HttpUri_Cluster{
+						Cluster: model.BuildSubsetKey(model.TrafficDirectionOutbound, "", jwksInfo.Hostname, jwksInfo.Port),
+					},
+					Timeout: timeout,
+				},
+				CacheDuration: &durationpb.Duration{Seconds: 5 * 60},
+			},
+		}
+		return
+	}
+
+	// Use inline jwks as existing flow, either jwtRule.jwks is empty or let istiod to fetch the jwtRule.jwksUri
+	provider.JwksSourceSpecifier = push.JwtKeyResolver.BuildLocalJwks(jwtRule.JwksUri, jwtRule.Issuer, jwtRule.Jwks, timeout.AsDuration())
 }
 
 func (a policyApplier) PortLevelSetting() map[uint32]model.MutualTLSMode {

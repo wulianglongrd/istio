@@ -35,6 +35,7 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_jwt "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/jwt_authn/v3"
+	"istio.io/istio/pkg/jwt"
 
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pkg/monitoring"
@@ -273,17 +274,35 @@ func (r *JwksResolver) GetPublicKey(issuer string, jwksURI string, timeout time.
 
 // BuildLocalJwks builds local Jwks by fetching the Jwt Public Key from the URL passed if it is empty.
 func (r *JwksResolver) BuildLocalJwks(jwksURI, jwtIssuer, jwtPubKey string, timeout time.Duration) *envoy_jwt.JwtProvider_LocalJwks {
-	var err error
-	if jwtPubKey == "" {
-		// jwtKeyResolver should never be nil since the function is only called in Discovery Server request processing
-		// workflow, where the JWT key resolver should have already been initialized on server creation.
-		jwtPubKey, err = r.GetPublicKey(jwtIssuer, jwksURI, timeout)
-		if err != nil {
-			log.Infof("The JWKS key is not yet fetched for issuer %s (%s), using a fake JWKS for now", jwtIssuer, jwksURI)
-			// This is a temporary workaround to reject a request with JWT token by using a fake jwks when istiod failed to fetch it.
-			// TODO(xulingqing): Find a better way to reject the request without using the fake jwks.
-			jwtPubKey = FakeJwks
+	if jwtPubKey != "" {
+		return &envoy_jwt.JwtProvider_LocalJwks{
+			LocalJwks: &core.DataSource{
+				Specifier: &core.DataSource_InlineString{
+					InlineString: jwtPubKey,
+				},
+			},
 		}
+	}
+
+	if strings.HasPrefix(jwksURI, jwt.JwksLocalFileDataSourcePrefix) {
+		filename, _ := strings.CutPrefix(jwksURI, jwt.JwksLocalFileDataSourcePrefix)
+		return &envoy_jwt.JwtProvider_LocalJwks{
+			LocalJwks: &core.DataSource{
+				Specifier: &core.DataSource_Filename{
+					Filename: filename,
+				},
+			},
+		}
+	}
+
+	// jwtKeyResolver should never be nil since the function is only called in Discovery Server request processing
+	// workflow, where the JWT key resolver should have already been initialized on server creation.
+	jwtPubKey, err := r.GetPublicKey(jwtIssuer, jwksURI, timeout)
+	if err != nil {
+		log.Infof("The JWKS key is not yet fetched for issuer %s (%s), using a fake JWKS for now", jwtIssuer, jwksURI)
+		// This is a temporary workaround to reject a request with JWT token by using a fake jwks when istiod failed to fetch it.
+		// TODO(xulingqing): Find a better way to reject the request without using the fake jwks.
+		jwtPubKey = FakeJwks
 	}
 	return &envoy_jwt.JwtProvider_LocalJwks{
 		LocalJwks: &core.DataSource{
