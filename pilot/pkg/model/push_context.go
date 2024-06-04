@@ -938,7 +938,7 @@ func (ps *PushContext) extraServicesForProxy(proxy *Proxy) sets.String {
 		for _, cfg := range jwtPolicies {
 			rules := cfg.Spec.(*v1beta1.RequestAuthentication).JwtRules
 			for _, r := range rules {
-				if uri := r.GetJwksUri(); len(uri) > 0 {
+				if uri := r.GetJwksUri(); len(uri) > 0 && !strings.HasPrefix(uri, "file://") {
 					jwksInfo, err := security.ParseJwksURI(uri)
 					if err == nil {
 						hosts.Insert(jwksInfo.Hostname.String())

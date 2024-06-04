@@ -100,7 +100,7 @@ var (
 	)
 
 	// golang supported methods: https://golang.org/src/net/http/method.go
-	supportedMethods = sets.New(
+	supportedMethods = sets.New[string](
 		http.MethodGet,
 		http.MethodHead,
 		http.MethodPost,
@@ -1439,7 +1439,7 @@ func validateJwtRule(rule *security_beta.JWTRule) (errs error) {
 		}
 	}
 
-	if len(rule.JwksUri) != 0 {
+	if len(rule.JwksUri) != 0 && !strings.HasPrefix(rule.JwksUri, "file://") {
 		if _, err := security.ParseJwksURI(rule.JwksUri); err != nil {
 			errs = multierror.Append(errs, err)
 		}
