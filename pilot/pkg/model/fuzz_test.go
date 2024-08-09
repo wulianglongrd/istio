@@ -22,7 +22,7 @@ import (
 	"istio.io/istio/pkg/test/util/assert"
 )
 
-func FuzzDeepCopyService(f *testing.F) {
+func FuzzDeepCopyServiceStruct(f *testing.F) {
 	fuzzDeepCopy[*Service](f)
 }
 

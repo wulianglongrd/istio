@@ -41,7 +41,6 @@ import (
 	memregistry "istio.io/istio/pilot/pkg/serviceregistry/memory"
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"istio.io/istio/pkg/config"
-	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/log"
@@ -55,27 +54,6 @@ var testMesh = &meshconfig.MeshConfig{
 		Seconds: 10,
 		Nanos:   1,
 	},
-}
-
-func buildEnvoyFilterConfigStore(configPatches []*networking.EnvoyFilter_EnvoyConfigObjectPatch) model.ConfigStore {
-	store := memory.Make(collections.Pilot)
-
-	for i, cp := range configPatches {
-		_, err := store.Create(config.Config{
-			Meta: config.Meta{
-				Name:             fmt.Sprintf("test-envoyfilter-%d", i),
-				Namespace:        "not-default",
-				GroupVersionKind: gvk.EnvoyFilter,
-			},
-			Spec: &networking.EnvoyFilter{
-				ConfigPatches: []*networking.EnvoyFilter_EnvoyConfigObjectPatch{cp},
-			},
-		})
-		if err != nil {
-			log.Errorf("create envoyfilter failed %v", err)
-		}
-	}
-	return store
 }
 
 func buildEnvoyFilterConfigStoreWithPriorities(configPatches []*networking.EnvoyFilter_EnvoyConfigObjectPatch, priorities []int32) model.ConfigStore {
@@ -111,22 +89,6 @@ func buildGolangPatchStruct(config string) *structpb.Struct {
 	val := &structpb.Struct{}
 	_ = protomarshal.Unmarshal([]byte(config), val)
 	return val
-}
-
-func newTestEnvironment(serviceDiscovery model.ServiceDiscovery, meshConfig *meshconfig.MeshConfig,
-	configStore model.ConfigStore,
-) *model.Environment {
-	e := &model.Environment{
-		ServiceDiscovery: serviceDiscovery,
-		ConfigStore:      configStore,
-		Watcher:          mesh.NewFixedWatcher(meshConfig),
-	}
-
-	pushContext := model.NewPushContext()
-	e.Init()
-	_ = pushContext.InitContext(e, nil, nil)
-	e.SetPushContext(pushContext)
-	return e
 }
 
 func TestApplyListenerPatches(t *testing.T) {
