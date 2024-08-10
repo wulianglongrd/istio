@@ -104,7 +104,7 @@ var (
 	)
 
 	// golang supported methods: https://golang.org/src/net/http/method.go
-	supportedMethods = sets.New(
+	supportedMethods = sets.New[string](
 		http.MethodGet,
 		http.MethodHead,
 		http.MethodPost,
