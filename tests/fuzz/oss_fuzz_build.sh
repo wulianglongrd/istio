@@ -42,7 +42,7 @@ go mod tidy
 #  set -x
 #  compile_native_go_fuzzer istio.io/istio/$fname $func $func
 
-compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyService FuzzDeepCopyService
+compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyServiceStruct FuzzDeepCopyServiceStruct
 compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyServiceInstance FuzzDeepCopyServiceInstance
 compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyWorkloadInstance FuzzDeepCopyWorkloadInstance
 compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyIstioEndpoint FuzzDeepCopyIstioEndpoint
