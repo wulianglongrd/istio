@@ -28,10 +28,6 @@ cd "${SRC}"/istio
 sed -i 's/\"testing\"/\"github.com\/AdamKorcz\/go-118-fuzz-build\/testing\"/g' "${SRC}"/istio/pkg/fuzz/util.go
 sed -i 's/out.initJwksResolver()/\/\/out.initJwksResolver()/g' "${SRC}"/istio/pilot/pkg/xds/discovery.go
 
-# https://github.com/AdamKorcz/go-118-fuzz-build?tab=readme-ov-file#using-test-utils-from-other-_testgo-files
-mv "${SRC}"/istio/pilot/pkg/networking/core/envoyfilter/listener_patch_test.go "${SRC}"/istio/pilot/pkg/networking/core/envoyfilter/listener_patch_test.go_fuzz.go
-mv "${SRC}"/istio/security/pkg/server/ca/server_test.go "${SRC}"/istio/security/pkg/server/ca/server_test.go_fuzz.go
-
 # Create empty file that imports "github.com/AdamKorcz/go-118-fuzz-build/testing"
 # This is a small hack to install this dependency, since it is not used anywhere,
 # and Go would therefore remove it from go.mod once we run "go mod tidy && go mod vendor".
@@ -40,12 +36,16 @@ go mod tidy
 
 # Find all native fuzzers and compile them
 # shellcheck disable=SC2016
-grep --line-buffered --include '*_test.go' -Pr 'func Fuzz.*\(.* \*testing\.F' | sed -E 's/(func Fuzz(.*)\(.*)/\2/' | xargs -I{} sh -c '
-  fname="$(dirname $(echo "{}" | cut -d: -f1))"
-  func="Fuzz$(echo "{}" | cut -d: -f2)"
-  set -x
-  compile_native_go_fuzzer istio.io/istio/$fname $func $func
-'
+#grep --line-buffered --include '*_test.go' -Pr 'func Fuzz.*\(.* \*testing\.F' | sed -E 's/(func Fuzz(.*)\(.*)/\2/' | xargs -I{} sh -c '
+#  fname="$(dirname $(echo "{}" | cut -d: -f1))"
+#  func="Fuzz$(echo "{}" | cut -d: -f2)"
+#  set -x
+#  compile_native_go_fuzzer istio.io/istio/$fname $func $func
+
+compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyService FuzzDeepCopyService
+compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyServiceInstance FuzzDeepCopyServiceInstance
+compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyWorkloadInstance FuzzDeepCopyWorkloadInstance
+compile_native_go_fuzzer istio.io/istio/pilot/pkg/model FuzzDeepCopyIstioEndpoint FuzzDeepCopyIstioEndpoint
 
 # Now compile fuzzers from tests/fuzz
 compile_go_fuzzer istio.io/istio/tests/fuzz FuzzCRDRoundtrip fuzz_crd_roundtrip
