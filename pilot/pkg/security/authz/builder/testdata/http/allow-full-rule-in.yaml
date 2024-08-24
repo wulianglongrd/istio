@@ -35,6 +35,15 @@ spec:
         - key: "request.headers[X-header]"
           values: ["header", "header-prefix-*", "*-suffix-header", "*"]
           notValues: ["not-header", "not-header-prefix-*", "*-not-suffix-header", "*"]
+        - key: "request.headers[X-header-exact-match]"
+          match:
+            exact: "foo"
+        - key: "request.headers[X-header-prefix-exact]"
+          match:
+            prefix: "/bar/"
+        - key: "request.headers[X-header-prefix-regex]"
+          match:
+            regex: "^foo"
         - key: "source.ip"
           values: ["10.10.10.10", "192.168.10.0/24"]
           notValues: ["90.10.10.10", "90.168.10.0/24"]

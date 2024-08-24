@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	netv1 "istio.io/api/networking/v1"
 	"strings"
 
 	rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
@@ -59,6 +60,9 @@ type rule struct {
 	g         generator
 	// This generator aggregates value predicates
 	extended extendedGenerator
+
+	match *netv1.StringMatch
+	mg    matchGenerator
 }
 
 type ruleList struct {
@@ -122,7 +126,11 @@ func New(r *authzpb.Rule, useExtendedJwt bool) (*Model, error) {
 				basePrincipal.appendLast(requestPresenterGenerator{}, k, when.Values, when.NotValues)
 			}
 		case strings.HasPrefix(k, attrRequestHeader):
-			basePrincipal.appendLast(requestHeaderGenerator{}, k, when.Values, when.NotValues)
+			if when.Match != nil {
+				basePrincipal.appendLastMatch(requestHeaderGenerator{}, k, when.Match)
+			} else {
+				basePrincipal.appendLast(requestHeaderGenerator{}, k, when.Values, when.NotValues)
+			}
 		case strings.HasPrefix(k, attrRequestClaims):
 			if useExtendedJwt {
 				basePrincipal.appendLastExtended(requestClaimGenerator{}, k, when.Values, when.NotValues)
@@ -306,6 +314,22 @@ func (r rule) permission(forTCP bool, action rbacpb.RBAC_Action) ([]*rbacpb.Perm
 
 func (r rule) principal(forTCP bool, useAuthenticated bool, action rbacpb.RBAC_Action) ([]*rbacpb.Principal, error) {
 	var principals []*rbacpb.Principal
+
+	// match
+	if r.mg != nil {
+		if r.match != nil {
+			p, err := r.mg.matchedPrincipal(r.key, r.match, forTCP)
+			if err := r.checkError(action, err); err != nil {
+				return nil, err
+			}
+			if p != nil {
+				principals = append(principals, p)
+			}
+		}
+		return principals, nil
+	}
+
+	// values
 	if r.extended != nil {
 		if len(r.values) > 0 {
 			p, err := r.extended.extendedPrincipal(r.key, r.values, forTCP)
@@ -332,6 +356,7 @@ func (r rule) principal(forTCP bool, useAuthenticated bool, action rbacpb.RBAC_A
 		}
 	}
 
+	// not values
 	if r.extended != nil {
 		if len(r.notValues) > 0 {
 			p, err := r.extended.extendedPrincipal(r.key, r.notValues, forTCP)
@@ -417,6 +442,18 @@ func (p *ruleList) appendLast(g generator, key string, values, notValues []strin
 		g:         g,
 	}
 
+	p.rules = append(p.rules, r)
+}
+
+func (p *ruleList) appendLastMatch(g matchGenerator, key string, match *netv1.StringMatch) {
+	if match == nil {
+		return
+	}
+	r := &rule{
+		key:   key,
+		match: match,
+		mg:    g,
+	}
 	p.rules = append(p.rules, r)
 }
 

@@ -15,6 +15,8 @@
 package matcher
 
 import (
+	"fmt"
+	netv1 "istio.io/api/networking/v1"
 	"strings"
 
 	routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -96,4 +98,36 @@ func PathMatcher(path string) *matcher.PathMatcher {
 			Path: StringMatcher(path),
 		},
 	}
+}
+
+func ToHeaderMatcher(k string, matcher *netv1.StringMatch) (*routepb.HeaderMatcher, error) {
+	var out *routepb.HeaderMatcher
+
+	switch matcher.MatchType {
+	case &netv1.StringMatch_Exact{}:
+		out = &routepb.HeaderMatcher{
+			Name: k,
+			HeaderMatchSpecifier: &routepb.HeaderMatcher_StringMatch{
+				StringMatch: StringMatcherExact(matcher.GetExact(), false),
+			},
+		}
+	case &netv1.StringMatch_Prefix{}:
+		out = &routepb.HeaderMatcher{
+			Name: k,
+			HeaderMatchSpecifier: &routepb.HeaderMatcher_StringMatch{
+				StringMatch: StringMatcherPrefix(matcher.GetPrefix(), false),
+			},
+		}
+	case &netv1.StringMatch_Regex{}:
+		out = &routepb.HeaderMatcher{
+			Name: k,
+			HeaderMatchSpecifier: &routepb.HeaderMatcher_StringMatch{
+				StringMatch: StringMatcherRegex(matcher.GetRegex()),
+			},
+		}
+	default:
+		return nil, fmt.Errorf("unimplemented type %s", matcher.String())
+	}
+
+	return out, nil
 }

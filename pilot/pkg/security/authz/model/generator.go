@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	netv1 "istio.io/api/networking/v1"
 	"strings"
 
 	rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
@@ -31,6 +32,11 @@ import (
 type generator interface {
 	permission(key, value string, forTCP bool) (*rbacpb.Permission, error)
 	principal(key, value string, forTCP bool, useAuthenticated bool) (*rbacpb.Principal, error)
+}
+
+type matchGenerator interface {
+	generator
+	matchedPrincipal(key string, match *netv1.StringMatch, forTCP bool) (*rbacpb.Principal, error)
 }
 
 type extendedGenerator interface {
@@ -338,6 +344,21 @@ func (requestHeaderGenerator) principal(key, value string, forTCP bool, _ bool) 
 		return nil, err
 	}
 	m := matcher.HeaderMatcher(header, value)
+	return principalHeader(m), nil
+}
+
+func (g requestHeaderGenerator) matchedPrincipal(key string, match *netv1.StringMatch, forTCP bool) (*rbacpb.Principal, error) {
+	if forTCP {
+		return nil, fmt.Errorf("%q is HTTP only", key)
+	}
+	header, err := extractNameInBrackets(strings.TrimPrefix(key, attrRequestHeader))
+	if err != nil {
+		return nil, err
+	}
+	m, err := matcher.ToHeaderMatcher(header, match)
+	if err != nil {
+		return nil, err
+	}
 	return principalHeader(m), nil
 }
 

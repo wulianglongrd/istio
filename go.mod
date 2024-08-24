@@ -233,4 +233,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
-replace istio.io/api => github.com/wulianglongrd/api v0.0.0-20240824050113-44c59a890922
+replace istio.io/api => /Users/didi/go/src/github.com/wulianglongrd/api
